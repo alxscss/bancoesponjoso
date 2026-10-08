@@ -90,6 +90,14 @@ def reiniciar():
         st.session_state[k] = v
     st.session_state.paso = 0
     st.session_state.resultado = None
+    # Limpiar tambien los valores temporales de los controles.
+    for campo in VALORES:
+        st.session_state.pop(f"ui_{campo}", None)
+
+
+def guardar_paso(campo):
+    """Guarda el valor del control actual fuera de su estado temporal."""
+    st.session_state[campo] = st.session_state[f"ui_{campo}"]
 
 
 def predecir():
@@ -120,33 +128,41 @@ if st.session_state.resultado is None:
     st.progress((paso + 1) / len(CAMPOS))
     st.write("")
 
+    # Cada paso tiene su propia clave visual. El dato permanente queda en
+    # st.session_state[key], que no se pierde cuando el widget desaparece.
+    widget_key = f"ui_{key}"
+    if widget_key not in st.session_state:
+        st.session_state[widget_key] = st.session_state[key]
+
     if key == "edad":
-        st.number_input("Edad (años)", min_value=18, max_value=100, step=1, key="edad")
+        st.number_input("Edad (años)", min_value=18, max_value=100, step=1, key=widget_key)
     elif key == "genero":
-        st.selectbox("Género", ["Female", "Male"], format_func=lambda x: {"Female":"Femenino", "Male":"Masculino"}[x], key="genero")
+        st.selectbox("Género", ["Female", "Male"], format_func=lambda x: {"Female": "Femenino", "Male": "Masculino"}[x], key=widget_key)
     elif key == "ingreso":
-        st.number_input("Ingreso anual declarado ($)", min_value=0, max_value=100000000, step=1000, key="ingreso", help="El monto de crédito estimado se expresará en la misma unidad monetaria que declares.")
+        st.number_input("Ingreso anual declarado ($)", min_value=0, max_value=100000000, step=1000, key=widget_key, help="El monto estimado se expresará en la misma unidad monetaria que declares.")
     elif key == "educacion":
         opciones = ["High School Diploma", "Associate's Degree", "Bachelor's Degree", "Master's Degree", "Doctorate"]
         nombres = ["Bachillerato", "Carrera técnica / grado asociado", "Licenciatura", "Maestría", "Doctorado"]
-        st.selectbox("Escolaridad", opciones, format_func=lambda x: dict(zip(opciones,nombres))[x], key="educacion")
+        st.selectbox("Escolaridad", opciones, format_func=lambda x: dict(zip(opciones, nombres))[x], key=widget_key)
     elif key == "estado":
-        st.selectbox("Estado civil", ["Single", "Married"], format_func=lambda x: {"Single":"Soltero/a", "Married":"Casado/a"}[x], key="estado")
+        st.selectbox("Estado civil", ["Single", "Married"], format_func=lambda x: {"Single": "Soltero/a", "Married": "Casado/a"}[x], key=widget_key)
     elif key == "hijos":
-        st.number_input("Número de hijos", min_value=0, max_value=20, step=1, key="hijos")
+        st.number_input("Número de hijos", min_value=0, max_value=20, step=1, key=widget_key)
     elif key == "vivienda":
-        st.selectbox("Situación de vivienda", ["Rented", "Owned"], format_func=lambda x: {"Rented":"Rentada", "Owned":"Propia"}[x], key="vivienda")
+        st.selectbox("Situación de vivienda", ["Rented", "Owned"], format_func=lambda x: {"Rented": "Rentada", "Owned": "Propia"}[x], key=widget_key)
 
     st.write("")
     anterior, siguiente = st.columns([1, 2], gap="small")
     with anterior:
         if paso > 0:
             if st.button("← Anterior", use_container_width=True):
+                guardar_paso(key)
                 st.session_state.paso -= 1
                 st.rerun()
     with siguiente:
         etiqueta = "Ver mi resultado →" if paso == len(CAMPOS)-1 else "Siguiente →"
         if st.button(etiqueta, type="primary", use_container_width=True):
+            guardar_paso(key)
             if paso < len(CAMPOS)-1:
                 st.session_state.paso += 1
                 st.rerun()
@@ -163,6 +179,21 @@ if st.session_state.resultado is None:
 else:
     resultado = st.session_state.resultado
     ingresos = st.session_state.ingreso
+
+    with st.expander("Verificar datos de evaluación"):
+        cliente = pd.DataFrame([{
+            "Age": st.session_state.edad,
+            "Gender": st.session_state.genero,
+            "Income": st.session_state.ingreso,
+            "Education": st.session_state.educacion,
+            "Marital Status": st.session_state.estado,
+            "Number of Children": st.session_state.hijos,
+            "Home Ownership": st.session_state.vivienda
+        }])
+
+        st.dataframe(cliente)
+        st.write("Predicción:", modelo.predict(cliente)[0])
+
     st.markdown('<div class="eyebrow">Evaluación completada</div>', unsafe_allow_html=True)
     if resultado == "Low":
         st.markdown('<div class="headline">Resultado de tu solicitud</div>', unsafe_allow_html=True)
